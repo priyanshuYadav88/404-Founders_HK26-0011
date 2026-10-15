@@ -6,22 +6,22 @@ import {
   ArrowRight,
   X,
   Play,
-  RotateCcw
+  RotateCcw,
+  Zap,
+  Cpu,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 import { Badge } from '../common/Badge';
-import { SecurityEvent } from '../../types';
-import { MOCK_SECURITY_EVENTS } from '../../data/mockData';
+import { useDemo } from '../../context/DemoContext';
+import { calculateRiskScore } from '../../services/detectionEngine';
 
 interface LiveMonitorPageProps {
-  selectedEvent: SecurityEvent | null;
-  onSelectEvent: (event: SecurityEvent | null) => void;
+  onNavigateToIncident?: (incidentId: string) => void;
 }
 
-export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
-  selectedEvent,
-  onSelectEvent
-}) => {
-  const [events, setEvents] = useState<SecurityEvent[]>(MOCK_SECURITY_EVENTS);
+export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({ onNavigateToIncident }) => {
+  const { events, simulateEvent, selectedEvent, setSelectedEvent, assets, incidents } = useDemo();
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -36,7 +36,8 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
         e.sourceIp.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.destinationIp.toLowerCase().includes(searchQuery.toLowerCase()) ||
         e.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.mitreTechnique.toLowerCase().includes(searchQuery.toLowerCase());
+        e.mitreTechnique.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (e.ruleTriggered?.name && e.ruleTriggered.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesSeverity = severityFilter === 'all' || e.severity === severityFilter;
       const matchesType = typeFilter === 'all' || e.eventType === typeFilter;
@@ -46,34 +47,6 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
     });
   }, [events, searchQuery, severityFilter, typeFilter, statusFilter]);
 
-  const handleSimulateNewEvent = () => {
-    const randomTypes: SecurityEvent['eventType'][] = [
-      'Failed Login',
-      'Port Scan',
-      'SQL Injection',
-      'DDoS Probe',
-      'Suspicious Login'
-    ];
-    const pickedType = randomTypes[Math.floor(Math.random() * randomTypes.length)];
-    const newId = `EVT-${Math.floor(8950 + Math.random() * 50)}`;
-    const now = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
-
-    const newSimulatedEvent: SecurityEvent = {
-      id: newId,
-      timestamp: now,
-      eventType: pickedType,
-      sourceIp: `198.51.100.${Math.floor(Math.random() * 200 + 10)}`,
-      destinationIp: '10.0.1.15 (auth-prod-srv01)',
-      severity: pickedType === 'Suspicious Login' ? 'high' : 'medium',
-      status: 'detected',
-      details: `Simulated ${pickedType} stream packet triggered by SOC synthetic agent tester.`,
-      mitreTechnique: pickedType === 'Failed Login' ? 'T1110.001 - Password Guessing' : 'T1046 - Service Discovery',
-      payloadSnippet: `SIMULATED_PROBE seq=${Math.floor(Math.random() * 10000)} protocol=TCP flag=SYN`
-    };
-
-    setEvents((prev) => [newSimulatedEvent, ...prev]);
-  };
-
   const handleResetFilters = () => {
     setSearchQuery('');
     setSeverityFilter('all');
@@ -81,9 +54,26 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
     setStatusFilter('all');
   };
 
+  // Compute live risk breakdown for the selected event
+  const currentRiskBreakdown = useMemo(() => {
+    if (!selectedEvent) return null;
+    const targetAsset = assets.find((a) => selectedEvent.destinationIp.includes(a.name)) || assets[0];
+    const confidence = selectedEvent.ruleTriggered?.confidence || 85;
+    return calculateRiskScore(selectedEvent.severity, confidence, targetAsset.criticality);
+  }, [selectedEvent, assets]);
+
+  // Find related incident if present
+  const relatedIncident = useMemo(() => {
+    if (!selectedEvent) return null;
+    if (selectedEvent.relatedIncidentId) {
+      return incidents.find((i) => i.id === selectedEvent.relatedIncidentId);
+    }
+    return incidents.find((i) => selectedEvent.destinationIp.includes(i.affectedAsset) && i.status !== 'Resolved');
+  }, [selectedEvent, incidents]);
+
   return (
     <div className="space-y-6">
-      {/* Top Banner with Demo Mode Indicator */}
+      {/* Top Banner with Demo Mode Indicator & Controls */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0E1626] border border-slate-800 rounded-lg p-4">
         <div>
           <div className="flex items-center gap-2">
@@ -92,26 +82,52 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500"></span>
             </span>
             <h2 className="text-sm font-semibold text-white tracking-wide uppercase font-mono">
-              Live Threat Monitor
+              Live Threat Monitor & Detection Engine
             </h2>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold">
-              Demo Mode Active
+              Live Rule Pipeline
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Real-time synthetic telemetry buffer. Filter events by severity, attack category, or status.
+            Real-time synthetic telemetry buffer evaluated by local detection rules. Click any event to inspect rule triggers and risk scoring.
           </p>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
+        {/* Action Controls for Quick Injections */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={handleSimulateNewEvent}
+            onClick={() => simulateEvent()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700 text-xs font-mono transition-colors shadow-sm"
-            title="Inject a simulated attack event into the stream"
+            title="Generate a random synthetic event"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Simulate Stream Event</span>
+            <span>Simulate Random Event</span>
+          </button>
+          <button
+            onClick={() =>
+              simulateEvent({
+                eventType: 'SQL Injection',
+                details: "Injected SQL tautology payload: ' UNION SELECT schema_name,2 FROM information_schema.schemata--",
+                severity: 'high'
+              })
+            }
+            className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono transition-colors"
+            title="Simulate a SQL Injection attempt"
+          >
+            + SQLi
+          </button>
+          <button
+            onClick={() =>
+              simulateEvent({
+                eventType: 'Failed Login',
+                details: 'Sequential dictionary brute force attempts against SSH root account.',
+                severity: 'medium'
+              })
+            }
+            className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono transition-colors"
+            title="Simulate Failed Logins"
+          >
+            + Failed Login
           </button>
         </div>
       </div>
@@ -124,7 +140,7 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
             <input
               type="text"
-              placeholder="Search IP, event, details..."
+              placeholder="Search IP, event, rule, details..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-[#111A2D] border border-slate-700/80 rounded px-3 py-1.5 pl-9 text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-cyan-500 font-mono"
@@ -204,9 +220,9 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
         </div>
       </div>
 
-      {/* Main Content Layout: Table + Detail Panel */}
+      {/* Main Content Layout: Table + Live Inspection Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Table View (Takes 2 cols if item selected, else full 3 cols) */}
+        {/* Table View */}
         <div className={`bg-[#0E1626] border border-slate-800 rounded-lg overflow-hidden ${selectedEvent ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs font-mono">
@@ -216,10 +232,10 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
                   <th className="py-3 px-4">Timestamp</th>
                   <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Severity</th>
+                  <th className="py-3 px-4">Risk Score</th>
+                  <th className="py-3 px-4">Rule Matched</th>
                   <th className="py-3 px-4">Source IP</th>
-                  <th className="py-3 px-4">Target</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                  <th className="py-3 px-4 text-right">Inspect</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -229,7 +245,7 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
                     return (
                       <tr
                         key={evt.id}
-                        onClick={() => onSelectEvent(evt)}
+                        onClick={() => setSelectedEvent(evt)}
                         className={`cursor-pointer transition-colors ${
                           isSelected
                             ? 'bg-cyan-950/40 border-l-2 border-cyan-400'
@@ -240,7 +256,7 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
                           {evt.id}
                         </td>
                         <td className="py-3 px-4 text-slate-400 text-[11px] whitespace-nowrap">
-                          {evt.timestamp}
+                          {evt.timestamp.split(' ')[1] || evt.timestamp}
                         </td>
                         <td className="py-3 px-4 text-slate-200">
                           {evt.eventType}
@@ -248,20 +264,32 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
                         <td className="py-3 px-4">
                           <Badge severity={evt.severity}>{evt.severity}</Badge>
                         </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`font-bold ${
+                              (evt.riskScore || 0) >= 80
+                                ? 'text-red-400'
+                                : (evt.riskScore || 0) >= 60
+                                ? 'text-amber-400'
+                                : 'text-cyan-400'
+                            }`}
+                          >
+                            {evt.riskScore || 65}/100
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-300 truncate max-w-[130px]">
+                          <span className="text-[10px] text-cyan-300 bg-cyan-950/80 px-1.5 py-0.5 rounded border border-cyan-800/60">
+                            {evt.ruleTriggered?.id || 'RULE-AUTO'}
+                          </span>
+                        </td>
                         <td className="py-3 px-4 text-slate-300">
                           {evt.sourceIp}
-                        </td>
-                        <td className="py-3 px-4 text-slate-400 truncate max-w-[140px]">
-                          {evt.destinationIp}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge status={evt.status}>{evt.status}</Badge>
                         </td>
                         <td className="py-3 px-4 text-right">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onSelectEvent(evt);
+                              setSelectedEvent(evt);
                             }}
                             className="text-cyan-400 hover:text-cyan-300 text-xs inline-flex items-center gap-1"
                           >
@@ -284,18 +312,18 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
           </div>
         </div>
 
-        {/* Event Details Panel */}
+        {/* Event Details & Rule Trigger Explanation Panel */}
         {selectedEvent && (
           <div className="bg-[#0E1626] border border-cyan-900/60 rounded-lg p-5 space-y-4 lg:col-span-1 sticky top-20 shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-cyan-400" />
                 <h3 className="text-xs font-mono font-bold text-white uppercase tracking-wider">
-                  Event Inspection
+                  Event & Rule Diagnostic
                 </h3>
               </div>
               <button
-                onClick={() => onSelectEvent(null)}
+                onClick={() => setSelectedEvent(null)}
                 className="text-slate-400 hover:text-white p-1 rounded"
                 title="Close panel"
               >
@@ -313,15 +341,56 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
                 </div>
               </div>
 
-              <div>
-                <span className="text-[11px] text-slate-400">Timestamp:</span>
-                <div className="text-slate-200 mt-0.5">{selectedEvent.timestamp}</div>
-              </div>
+              {/* Dynamic Risk Score Breakdown */}
+              {currentRiskBreakdown && (
+                <div className="bg-[#111A2D] p-3 rounded-lg border border-cyan-800/40 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-slate-300 font-bold flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                      Calculated Demo Risk Score:
+                    </span>
+                    <span className="text-sm font-bold text-cyan-300">
+                      {currentRiskBreakdown.totalScore}/100 ({currentRiskBreakdown.level})
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        currentRiskBreakdown.totalScore >= 80
+                          ? 'bg-red-500'
+                          : currentRiskBreakdown.totalScore >= 60
+                          ? 'bg-amber-500'
+                          : 'bg-cyan-500'
+                      }`}
+                      style={{ width: `${currentRiskBreakdown.totalScore}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 pt-1 font-sans">
+                    <strong>Formula:</strong> {currentRiskBreakdown.formula}
+                  </p>
+                </div>
+              )}
 
-              <div>
-                <span className="text-[11px] text-slate-400">Attack Classification:</span>
-                <div className="text-cyan-300 font-semibold mt-0.5">{selectedEvent.eventType}</div>
-              </div>
+              {/* Rule Trigger Explanation */}
+              {selectedEvent.ruleTriggered && (
+                <div className="bg-[#111A2D] p-3 rounded-lg border border-amber-900/40 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-amber-300 font-bold flex items-center gap-1">
+                      <Cpu className="w-3.5 h-3.5 text-amber-400" />
+                      Rule Triggered:
+                    </span>
+                    <span className="text-[10px] bg-amber-950 px-1.5 py-0.5 rounded border border-amber-800 text-amber-300 font-bold">
+                      {selectedEvent.ruleTriggered.id}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-200 font-semibold">
+                    {selectedEvent.ruleTriggered.name}
+                  </div>
+                  <p className="text-xs text-slate-300 font-sans leading-relaxed pt-0.5">
+                    <strong>Why it triggered:</strong> {selectedEvent.ruleTriggered.reason}
+                  </p>
+                </div>
+              )}
 
               <div>
                 <span className="text-[11px] text-slate-400">Network Flow:</span>
@@ -338,13 +407,6 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
                 </div>
               </div>
 
-              <div>
-                <span className="text-[11px] text-slate-400">Heuristic Observation:</span>
-                <p className="text-slate-300 text-xs mt-1 font-sans leading-relaxed">
-                  {selectedEvent.details}
-                </p>
-              </div>
-
               {selectedEvent.payloadSnippet && (
                 <div>
                   <span className="text-[11px] text-slate-400 flex items-center gap-1">
@@ -356,11 +418,22 @@ export const LiveMonitorPage: React.FC<LiveMonitorPageProps> = ({
                   </div>
                 </div>
               )}
-            </div>
 
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-              <span>Verification Status:</span>
-              <span className="text-cyan-400">Simulated Telemetry</span>
+              {/* Related Incident Link */}
+              {relatedIncident && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => onNavigateToIncident && onNavigateToIncident(relatedIncident.id)}
+                    className="w-full flex items-center justify-between p-2.5 rounded bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-800/80 text-cyan-300 text-xs font-mono transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Linked Incident: <strong>{relatedIncident.id}</strong></span>
+                    </span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

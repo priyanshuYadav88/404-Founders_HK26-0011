@@ -14,6 +14,17 @@ export interface SecurityEvent {
   details: string;
   mitreTechnique: string;
   payloadSnippet?: string;
+  riskScore?: number;
+  relatedIncidentId?: string;
+  isLabelledAttack?: boolean;
+  ruleTriggered?: {
+    id: string;
+    name: string;
+    reason: string;
+    confidence: number;
+    category: string;
+    triggered: boolean;
+  };
 }
 
 export interface Incident {
@@ -31,6 +42,7 @@ export interface Incident {
   mitreTechnique: string;
   recommendedAction: string;
   assignedAnalyst?: string;
+  relatedEventIds?: string[];
 }
 
 export interface StorylineNode {

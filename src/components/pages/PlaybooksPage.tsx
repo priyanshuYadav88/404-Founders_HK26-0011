@@ -8,35 +8,29 @@ import {
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { ResponsePlaybook } from '../../types';
-import { MOCK_RESPONSE_PLAYBOOKS } from '../../data/mockData';
+import { useDemo } from '../../context/DemoContext';
 
 export const PlaybooksPage: React.FC = () => {
-  const [playbooks, setPlaybooks] = useState<ResponsePlaybook[]>(MOCK_RESPONSE_PLAYBOOKS);
+  const { playbooks, updatePlaybookStatus } = useDemo();
   const [selectedPlaybook, setSelectedPlaybook] = useState<ResponsePlaybook | null>(null);
   const [executionMessage, setExecutionMessage] = useState<string | null>(null);
 
   const handleApprove = (id: string) => {
-    setPlaybooks((prev) =>
-      prev.map((pb) => (pb.id === id ? { ...pb, approvalStatus: 'Approved' } : pb))
-    );
+    updatePlaybookStatus(id, 'Approved');
     if (selectedPlaybook && selectedPlaybook.id === id) {
       setSelectedPlaybook({ ...selectedPlaybook, approvalStatus: 'Approved' });
     }
   };
 
   const handleReject = (id: string) => {
-    setPlaybooks((prev) =>
-      prev.map((pb) => (pb.id === id ? { ...pb, approvalStatus: 'Rejected' } : pb))
-    );
+    updatePlaybookStatus(id, 'Rejected');
     if (selectedPlaybook && selectedPlaybook.id === id) {
       setSelectedPlaybook({ ...selectedPlaybook, approvalStatus: 'Rejected' });
     }
   };
 
   const handleSimulateExecution = (id: string) => {
-    setPlaybooks((prev) =>
-      prev.map((pb) => (pb.id === id ? { ...pb, approvalStatus: 'Executed (Simulated)' } : pb))
-    );
+    updatePlaybookStatus(id, 'Executed (Simulated)');
     if (selectedPlaybook && selectedPlaybook.id === id) {
       setSelectedPlaybook({ ...selectedPlaybook, approvalStatus: 'Executed (Simulated)' });
     }

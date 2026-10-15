@@ -10,14 +10,8 @@ import {
 } from 'lucide-react';
 import { MetricCard } from '../common/MetricCard';
 import { Badge } from '../common/Badge';
-import {
-  MOCK_SECURITY_EVENTS,
-  MOCK_INCIDENTS,
-  MOCK_ASSETS,
-  MOCK_INCIDENT_SEVERITY_BREAKDOWN,
-  MOCK_TIMELINE_ACTIVITY
-} from '../../data/mockData';
 import { SecurityEvent, Incident } from '../../types';
+import { useDemo } from '../../context/DemoContext';
 
 interface OverviewPageProps {
   onNavigateToIncidents: () => void;
@@ -32,9 +26,10 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
   onSelectEvent,
   onSelectIncident
 }) => {
-  const totalEvents = 1428;
-  const activeIncidents = MOCK_INCIDENTS.filter(i => i.status !== 'Resolved').length;
-  const criticalAlerts = MOCK_SECURITY_EVENTS.filter(e => e.severity === 'critical').length;
+  const { metrics, events, incidents, assets } = useDemo();
+
+  // Sort assets by risk score descending
+  const topRiskAssets = [...assets].sort((a, b) => b.riskScore - a.riskScore).slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -46,15 +41,15 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-200">
-              SOC Pipeline Status: <span className="text-cyan-400 font-mono">Demo Telemetry Mode</span>
+              SOC Pipeline Status: <span className="text-cyan-400 font-mono">{metrics.detectionStatus}</span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Displaying synthetic security telemetry and baseline models. Real-time correlation will activate in Checkpoint 2.
+              Real-time dynamic telemetry evaluation active in browser. Metrics recalculate as events are simulated.
             </p>
           </div>
         </div>
         <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 whitespace-nowrap">
-          Engine: Synthetic v0.1
+          Engine: Client Rules v0.2
         </span>
       </div>
 
@@ -62,42 +57,42 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           title="Total Security Events"
-          value={totalEvents.toLocaleString()}
-          subtitle="Past 24 hours (simulated)"
-          badge="+12% / 1h"
+          value={metrics.totalEvents}
+          subtitle="Dynamic buffer in session"
+          badge={`+${metrics.totalEvents - 7 > 0 ? metrics.totalEvents - 7 : 0} live`}
           badgeVariant="cyan"
           icon={Activity}
-          trend="Synthetic Feed"
+          trend="Calculated"
           trendPositive={true}
         />
         <MetricCard
           title="Active Incidents"
-          value={activeIncidents}
-          subtitle="Under triage"
-          badge="1 Critical P1"
+          value={metrics.activeIncidents}
+          subtitle="Triage & correlation pipeline"
+          badge={`${incidents.filter((i) => i.severity === 'P1').length} Critical P1`}
           badgeVariant="red"
           icon={AlertTriangle}
-          trend="Requires Review"
+          trend="Dynamic Score"
           trendPositive={false}
         />
         <MetricCard
           title="Critical Alerts"
-          value={criticalAlerts}
-          subtitle="Unresolved critical level"
-          badge="High Severity"
+          value={metrics.criticalAlerts}
+          subtitle="Severity: critical"
+          badge="High Exposure"
           badgeVariant="red"
           icon={ShieldAlert}
-          trend="Immediate Action"
+          trend="Requires Action"
           trendPositive={false}
         />
         <MetricCard
           title="Detection Status"
-          value="Nominal"
-          subtitle="Rule Engine & ML Baselines"
-          badge="Simulation"
+          value={metrics.detectionStatus}
+          subtitle="Local Heuristic & Scoring"
+          badge="In-Browser"
           badgeVariant="green"
           icon={Cpu}
-          trend="4 Models Loaded"
+          trend="5 Rules Active"
           trendPositive={true}
         />
       </div>
@@ -111,28 +106,33 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
               <h3 className="text-xs uppercase font-mono font-semibold tracking-wider text-slate-400">
                 Incident Severity Distribution
               </h3>
-              <span className="text-[11px] font-mono text-cyan-400">Total: 4 active</span>
+              <span className="text-[11px] font-mono text-cyan-400">Total: {incidents.length}</span>
             </div>
 
             {/* Severity Bars */}
             <div className="space-y-3">
-              {MOCK_INCIDENT_SEVERITY_BREAKDOWN.map((item) => (
-                <div key={item.severity} className="space-y-1">
-                  <div className="flex justify-between text-xs font-mono">
-                    <span className="text-slate-300">{item.severity}</span>
-                    <span className="text-slate-400">{item.count} incident ({item.count * 25}%)</span>
+              {metrics.severityBreakdown.map((item) => {
+                const percentage = incidents.length > 0 ? Math.round((item.count / incidents.length) * 100) : 0;
+                return (
+                  <div key={item.severity} className="space-y-1">
+                    <div className="flex justify-between text-xs font-mono">
+                      <span className="text-slate-300">{item.severity}</span>
+                      <span className="text-slate-400">
+                        {item.count} ({percentage}%)
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-300"
+                        style={{
+                          width: `${Math.max(5, percentage)}%`,
+                          backgroundColor: item.color
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${item.count * 25}%`,
-                        backgroundColor: item.color
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -149,19 +149,20 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
               <h3 className="text-xs uppercase font-mono font-semibold tracking-wider text-slate-400">
                 Hourly Event Volume Trend
               </h3>
-              <span className="text-[11px] font-mono text-cyan-400">Events / 10m bucket</span>
+              <span className="text-[11px] font-mono text-cyan-400">Dynamic telemetry bins</span>
             </div>
 
             <div className="h-32 flex items-end gap-3 pt-4 px-2">
-              {MOCK_TIMELINE_ACTIVITY.map((bucket, idx) => {
-                const heightPercent = Math.max(15, (bucket.count / 90) * 100);
+              {metrics.timelineActivity.map((bucket, idx) => {
+                const maxVal = Math.max(...metrics.timelineActivity.map((b) => b.count), 20);
+                const heightPercent = Math.max(15, (bucket.count / maxVal) * 100);
                 return (
                   <div key={idx} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
                     <span className="text-[10px] font-mono text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
                       {bucket.count}
                     </span>
                     <div
-                      className="w-full bg-cyan-950 border border-cyan-500/50 rounded-t group-hover:bg-cyan-900 transition-all"
+                      className="w-full bg-cyan-950 border border-cyan-500/50 rounded-t group-hover:bg-cyan-900 transition-all duration-300"
                       style={{ height: `${heightPercent}%` }}
                     />
                     <span className="text-[10px] font-mono text-slate-400">
@@ -174,8 +175,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>Peak Velocity:</span>
-            <span className="text-cyan-400 font-mono">88 events/10m @ 12:50</span>
+            <span>Current Ingestion:</span>
+            <span className="text-cyan-400 font-mono">{events.length} simulated events</span>
           </div>
         </div>
 
@@ -190,7 +191,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
             </div>
 
             <div className="space-y-3">
-              {MOCK_ASSETS.slice(0, 3).map((asset) => (
+              {topRiskAssets.map((asset) => (
                 <div
                   key={asset.id}
                   className="p-2.5 rounded bg-slate-900/60 border border-slate-800 flex items-center justify-between"
@@ -223,8 +224,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
-            <span>Criticality Monitored:</span>
-            <span className="text-slate-300 font-mono">6 Assets Active</span>
+            <span>Total Monitored Hosts:</span>
+            <span className="text-slate-300 font-mono">{assets.length} Active</span>
           </div>
         </div>
       </div>
@@ -250,7 +251,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           </div>
 
           <div className="space-y-2.5">
-            {MOCK_INCIDENTS.map((inc) => (
+            {incidents.slice(0, 4).map((inc) => (
               <div
                 key={inc.id}
                 onClick={() => onSelectIncident(inc)}
@@ -264,7 +265,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                         {inc.id}
                       </span>
                       <span className="text-[11px] font-mono text-slate-400">
-                        {inc.timestamp}
+                        {inc.timestamp.includes(' ') ? inc.timestamp.split(' ')[1] : inc.timestamp}
                       </span>
                     </div>
                     <div className="text-xs text-slate-300 font-medium">
@@ -306,25 +307,29 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                   <th className="pb-2">Timestamp</th>
                   <th className="pb-2">Event</th>
                   <th className="pb-2">Source</th>
+                  <th className="pb-2">Risk</th>
                   <th className="pb-2">Severity</th>
                   <th className="pb-2 text-right">Inspect</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
-                {MOCK_SECURITY_EVENTS.slice(0, 5).map((evt) => (
+                {events.slice(0, 5).map((evt) => (
                   <tr
                     key={evt.id}
                     className="hover:bg-slate-800/40 transition-colors cursor-pointer group"
                     onClick={() => onSelectEvent(evt)}
                   >
                     <td className="py-2.5 text-slate-400 text-[11px] whitespace-nowrap">
-                      {evt.timestamp.split(' ')[1]}
+                      {evt.timestamp.split(' ')[1] || evt.timestamp}
                     </td>
                     <td className="py-2.5 text-slate-200 group-hover:text-cyan-300">
                       {evt.eventType}
                     </td>
                     <td className="py-2.5 text-slate-400">
                       {evt.sourceIp}
+                    </td>
+                    <td className="py-2.5 text-cyan-300 font-semibold">
+                      {evt.riskScore ? `${evt.riskScore}/100` : 'N/A'}
                     </td>
                     <td className="py-2.5">
                       <Badge severity={evt.severity}>{evt.severity}</Badge>

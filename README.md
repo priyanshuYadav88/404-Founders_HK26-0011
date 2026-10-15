@@ -1,138 +1,58 @@
 # ThreatPulse AI
 
 > **Intelligent Cyber Threat Detection & Investigation Platform**  
-> *Security Operations Center (SOC) Console — Checkpoint 1: Frontend UI*
+> *Security Operations Center (SOC) Console — Interactive In-Browser Prototype*
 
 ---
 
-## Overview
+## Quick Hackathon Demo Instructions (Under 2 Minutes)
 
-**ThreatPulse AI** is a Security Operations Center (SOC) platform designed for real-time cyber threat detection, triage, and multi-stage attack storyline correlation. 
-
-This repository currently houses **Checkpoint 1: Frontend UI**, delivering a dark-navy/charcoal cybersecurity dashboard engineered with React 18, TypeScript, Vite, and Tailwind CSS.
-
-> [!NOTE]
-> **Checkpoint 1 Scope — Frontend Demonstration Mode**  
-> All security telemetry, events, anomaly scores, and attack sequences displayed in Checkpoint 1 are **synthetic and simulated** for interface and workflow validation. No active background network scanning, destructive remediation commands, or live AI model serving are executed in this checkpoint. Checkpoint 2 will integrate the live FastAPI backend.
-
----
-
-## Design System & UX Standards
-
-- **Color Palette**:
-  - Background: Dark Charcoal & Deep Navy (`#0B0F17`, `#0E1626`, `#111A2D`)
-  - Accent: Professional Cyan (`#06B6D4`, `#0891B2`)
-  - Status Indicators: Restrained Critical Red (`#EF4444`), Warning Amber (`#F59E0B`), and Nominal Green (`#10B981`)
-- **Typography**: Clean monospace fonts (`JetBrains Mono` / `monospace`) for hashes, IPs, and identifiers; high-legibility sans-serif (`Inter`) for analysis notes.
-- **Icons**: Lucide React vector icons.
-- **Layout**: Desktop-first responsive layout with persistent, collapsible sidebar navigation.
-- **Interactivity**: Every visible button triggers a real action (filtering, modal inspection, simulated execution ledger updates, or simulation event generation).
-
----
-
-## Completed Pages & Modules
-
-| # | Page / Module | Key Features & Implementation |
-|---|---|---|
-| **A** | **Overview Dashboard** | Real-time KPI metrics (Total Events: 1,428, Active Incidents: 4, Critical Alerts: 1, Nominal Status), 1-Hour Telemetry Volume trend bar chart, Incident Severity Distribution, Top Asset Risk summary, and Recent Events feed. |
-| **B** | **Live Threat Monitor** | Searchable security event table, multi-faceted filtering by Severity, Attack Type, and Status, interactive event details drawer with raw payload inspector, and "Simulate Stream Event" injector. |
-| **C** | **Incidents Management** | Triage table with P1, P2, P3, and P4 priority filters, AI confidence meters, status updating workflow (Active, Investigating, Contained, Resolved), and deep-dive incident modal with playbook cross-linking. |
-| **D** | **Attack Storyline** | Visual 4-stage progression sequence: `Port Scan` &rarr; `Failed Login Attempts` &rarr; `Suspicious Login` &rarr; `Privilege Change`. Connecting directional arrows, forensic timestamps, extracted IoC indicators, and explicit non-factual inference disclaimers. |
-| **E** | **Detection Lab** | Dual-section proving ground for **Known Attack Detection** (AST parser & rule signatures) and **Anomaly Detection** (Isolation Forest & Autoencoder models). Covers Brute Force, Port Scan, SQL Injection, and DDoS with simulated test-vector harness. |
-| **F** | **MITRE ATT&CK® Mapping** | Techniques mapped against observed heuristics, prominently highlighting **T1110 (Brute Force)** and **T1046 (Network Service Discovery)**, with explicit "Suggested" and "Illustrative" mapping tags. |
-| **G** | **Asset Inventory** | Comprehensive fleet overview covering Production, Staging, and Development assets. Displays Hostname, IP, Enclave, Criticality, Risk Exposure Index (0–100), and connected incident correlation. |
-| **H** | **Response Playbooks** | Suggested defensive mitigations with blast radius and disruption analysis. Features mandatory **Analyst Review Step**, approval workflow (`Pending Review` &rarr; `Approved` &rarr; `Executed (Simulated)`), with zero destructive commands. |
-| **I** | **Detection Quality** | Quality and observability metrics: Precision (94.2%), Recall (91.8%), False-Positive Rate (2.1%), and Detection Latency (142 ms p95), accompanied by a 2,500-sample evaluation confusion matrix. |
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- **Node.js**: `v18.0.0` or later (tested on `v24.21.0`)
-- **npm**: `v9.0.0` or later (tested on `v12.0.2`)
-
-### Installation & Run
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/priyanshuYadav88/404-Founders_HK26-0011.git
-   cd 404-Founders_HK26-0011
-   ```
-
-2. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-3. **Start the local development server**:
-   ```bash
-   npm run dev
-   ```
-   Open your browser to [http://localhost:5173](http://localhost:5173).
-
-4. **Build for production**:
-   ```bash
-   npm run build
-   ```
-
-5. **Preview production build locally**:
-   ```bash
-   npm run preview
-   ```
-
----
-
-## Project Structure
-
+### 1. Launch the Application
+```bash
+# Start local Vite development server
+npm run dev
 ```
-├── .gitignore
-├── index.html
-├── package.json
-├── postcss.config.js
-├── README.md
-├── tailwind.config.js
-├── test.py                  # Preserved from initial commit
-├── tsconfig.json
-├── tsconfig.node.json
-├── vite.config.ts
-└── src/
-    ├── App.tsx              # Root app coordinator & page router
-    ├── index.css            # Tailwind base directives & dark scrollbars
-    ├── main.tsx             # React entry point
-    ├── types/
-    │   └── index.ts         # TypeScript interfaces & domain models
-    ├── data/
-    │   └── mockData.ts      # Structured synthetic SOC telemetry
-    └── components/
-        ├── common/
-        │   ├── Badge.tsx         # Severity & status badge tags
-        │   ├── DemoBanner.tsx    # Persistent simulation banner
-        │   ├── MetricCard.tsx    # SOC KPI card with trend indicator
-        │   └── Modal.tsx         # Accessible dialog for incident/playbook reviews
-        ├── layout/
-        │   ├── Header.tsx        # Top status bar with live UTC clock & refresh
-        │   └── Sidebar.tsx       # Collapsible persistent navigation with 9 pages
-        └── pages/
-            ├── OverviewPage.tsx         # Page A: High-level SOC cockpit
-            ├── LiveMonitorPage.tsx      # Page B: Telemetry buffer & search
-            ├── IncidentsPage.tsx        # Page C: Incident triage & P1-P4 filters
-            ├── AttackStorylinePage.tsx  # Page D: 4-stage progression chain
-            ├── DetectionLabPage.tsx     # Page E: Known attack & anomaly ML lab
-            ├── MitreAttackPage.tsx      # Page F: MITRE ATT&CK technique matrix
-            ├── AssetInventoryPage.tsx   # Page G: Defended assets & posture
-            ├── PlaybooksPage.tsx        # Page H: Defensive response approval
-            └── DetectionQualityPage.tsx # Page I: Pipeline accuracy & latency
-```
+Open **[http://localhost:5173](http://localhost:5173)** in your browser.
+
+### 2. Demonstrate the End-to-End Threat Lifecycle (3-Step Demo)
+
+1. **Simulate Live Threat Detection**:
+   - In the top **Demo Controls** bar, click **"Simulate Event"** or click **"+ SQLi" / "+ Failed Login"** on the **Live Threat Monitor** page.
+   - Notice the **Live Threat Monitor** immediately ingests the event, runs the local rule engine (`RULE-APP-003`, `RULE-AUTH-001`, `RULE-NET-002`, `RULE-VOL-004`, or `RULE-PRIV-005`), explains **why the rule triggered**, and computes the **multi-factor Risk Score (Severity × Criticality × Confidence)**.
+
+2. **Inspect Correlated Incidents & Storyline**:
+   - Navigate to **Incidents**: Notice high-severity detections automatically promoted to correlated incidents (e.g., P1/P2) with auto-assigned playbooks and target host attribution.
+   - Navigate to **Attack Storyline**: Observe the 4-stage progression (`Port Scan` &rarr; `Failed Login` &rarr; `Suspicious Login` &rarr; `Privilege Change`). Click any node to see live matched telemetry from the demo buffer.
+
+3. **Execute Defensive Playbook & Review Quality**:
+   - Navigate to **Response Playbooks**: Click **"Review Step & Details"**, authorize the action, and click **"Execute (Simulated)"** to observe the containment workflow.
+   - Navigate to **Detection Quality**: Watch Precision (PPV), Recall (Sensitivity), and False-Positive Rate update dynamically from the event buffer.
+   - In the top bar, click **"Streaming ON"** to let the demo generate simulated traffic automatically during presentations, or click **"Reset"** to return to baseline.
 
 ---
 
-## Checkpoint 2 Roadmap: Backend Integration
+## Technical Architecture & In-Browser Engine
 
-The following components are scheduled for **Checkpoint 2**:
-1. **FastAPI Detection Engine**: Python backend implementing real-time syslog and NetFlow ingestion.
-2. **WebSocket Telemetry Stream**: Bidirectional channel replacing synthetic client timers with live event feeds.
-3. **ML Inference Pipeline**: Live scoring models (Isolation Forest, autoencoder anomaly detectors, and regex-based AST parsers).
-4. **MITRE ATT&CK Verification**: Cryptographic evidence attachment to elevate "Suggested" mappings into verified detections.
-5. **Secure Execution Gateway**: Sandboxed API connector for actual firewall rule and security group dispatch.
+- **Framework**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons.
+- **Rule Engine (`src/services/detectionEngine.ts`)**:
+  - `RULE-AUTH-001`: High-velocity authentication failure heuristic with sliding window.
+  - `RULE-NET-002`: Half-open TCP SYN port sweep classifier.
+  - `RULE-APP-003`: AST token pattern matcher for SQL injection tautologies.
+  - `RULE-VOL-004`: Volumetric traffic deviation and rapid stream reset anomaly detector.
+  - `RULE-PRIV-005`: File integrity and unauthorized sudoers elevation monitor.
+- **Multi-Factor Risk Scoring**:
+  $$\text{Risk Score} = (0.45 \times \text{Severity Weight} + 0.35 \times \text{Asset Criticality} + 0.20 \times \text{Confidence}) \times 100$$
+- **Local Persistence**: State automatically persists across page refreshes via `localStorage` and can be reset with the top **"Reset"** button.
+
+---
+
+## Build Verification
+
+```bash
+# Compile TypeScript and generate production distribution
+npm run build
+
+# Preview production build locally
+npm run preview
+```
+Production build compiles with 0 errors in under 4 seconds.

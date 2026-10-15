@@ -1,18 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Server,
   Search,
-  ArrowRight
+  ArrowRight,
+  ExternalLink
 } from 'lucide-react';
-import { Asset } from '../../types';
-import { MOCK_ASSETS } from '../../data/mockData';
+import { Badge } from '../common/Badge';
+import { useDemo } from '../../context/DemoContext';
 
-export const AssetInventoryPage: React.FC = () => {
-  const [assets] = useState<Asset[]>(MOCK_ASSETS);
+interface AssetInventoryPageProps {
+  onNavigateToIncident?: (incidentId: string) => void;
+}
+
+export const AssetInventoryPage: React.FC<AssetInventoryPageProps> = ({ onNavigateToIncident }) => {
+  const { assets, incidents, events, selectedAssetId, setSelectedAssetId } = useDemo();
   const [searchQuery, setSearchQuery] = useState('');
   const [envFilter, setEnvFilter] = useState<string>('all');
   const [criticalityFilter, setCriticalityFilter] = useState<string>('all');
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(assets[0]);
+
+  const selectedAsset = useMemo(() => {
+    if (selectedAssetId) {
+      return assets.find((a) => a.id === selectedAssetId) || assets[0];
+    }
+    return assets[0];
+  }, [selectedAssetId, assets]);
+
+  // Associated incidents for selected asset
+  const assetIncidents = useMemo(() => {
+    if (!selectedAsset) return [];
+    return incidents.filter((i) => i.affectedAsset === selectedAsset.name);
+  }, [selectedAsset, incidents]);
+
+  // Associated events for selected asset
+  const assetEvents = useMemo(() => {
+    if (!selectedAsset) return [];
+    return events.filter(
+      (e) =>
+        e.destinationIp.includes(selectedAsset.name) ||
+        e.destinationIp.includes(selectedAsset.ipAddress)
+    );
+  }, [selectedAsset, events]);
 
   const filteredAssets = assets.filter((a) => {
     const matchesSearch =
@@ -36,11 +63,11 @@ export const AssetInventoryPage: React.FC = () => {
               Defended Asset Inventory & Posture
             </h2>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold">
-              6 Hosts Monitored
+              {assets.length} Hosts Monitored
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Infrastructure telemetry topology spanning Production, Staging, and Development enclaves.
+            Infrastructure telemetry topology spanning Production, Staging, and Development enclaves. Click any host to inspect associated incidents and events.
           </p>
         </div>
 
@@ -108,17 +135,21 @@ export const AssetInventoryPage: React.FC = () => {
                   <th className="py-3 px-4">Environment</th>
                   <th className="py-3 px-4">Criticality</th>
                   <th className="py-3 px-4">Risk Exposure</th>
-                  <th className="py-3 px-4">Incidents</th>
+                  <th className="py-3 px-4">Active Incidents</th>
                   <th className="py-3 px-4 text-right">Inspect</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {filteredAssets.map((asset) => {
                   const isSelected = selectedAsset?.id === asset.id;
+                  const matchingActiveIncCount = incidents.filter(
+                    (i) => i.affectedAsset === asset.name && i.status !== 'Resolved'
+                  ).length;
+
                   return (
                     <tr
                       key={asset.id}
-                      onClick={() => setSelectedAsset(asset)}
+                      onClick={() => setSelectedAssetId(asset.id)}
                       className={`cursor-pointer transition-colors ${
                         isSelected
                           ? 'bg-cyan-950/40 border-l-2 border-cyan-400'
@@ -178,8 +209,8 @@ export const AssetInventoryPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
-                        {asset.activeIncidents > 0 ? (
-                          <span className="text-red-400 font-bold">{asset.activeIncidents} active</span>
+                        {matchingActiveIncCount > 0 ? (
+                          <span className="text-red-400 font-bold">{matchingActiveIncCount} active</span>
                         ) : (
                           <span className="text-slate-400">0</span>
                         )}
@@ -188,7 +219,7 @@ export const AssetInventoryPage: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedAsset(asset);
+                            setSelectedAssetId(asset.id);
                           }}
                           className="text-cyan-400 hover:text-cyan-300 text-xs inline-flex items-center gap-1"
                         >
@@ -204,9 +235,9 @@ export const AssetInventoryPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Selected Asset Posture Card */}
+        {/* Selected Asset Posture Card with Associated Incidents & Events */}
         {selectedAsset && (
-          <div className="bg-[#0E1626] border border-cyan-900/60 rounded-lg p-5 space-y-4 lg:col-span-1 sticky top-20">
+          <div className="bg-[#0E1626] border border-cyan-900/60 rounded-lg p-5 space-y-4 lg:col-span-1 sticky top-20 shadow-xl">
             <div className="border-b border-slate-800 pb-3 flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-mono font-bold text-white">
@@ -255,17 +286,69 @@ export const AssetInventoryPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Associated Incidents */}
               <div>
-                <span className="text-[11px] text-slate-400">Current Incident Correlation:</span>
-                {selectedAsset.activeIncidents > 0 ? (
-                  <div className="bg-red-950/40 border border-red-800/60 p-2.5 rounded mt-1 text-red-300 font-sans text-xs">
-                    Linked to <strong className="font-mono">INC-2026-9041</strong> (Multi-stage Privilege Escalation). Response playbook isolation recommended.
-                  </div>
-                ) : (
-                  <div className="bg-emerald-950/30 border border-emerald-800/40 p-2.5 rounded mt-1 text-emerald-300 font-sans text-xs">
-                    No active critical incidents currently correlated to this asset.
-                  </div>
-                )}
+                <span className="text-[11px] text-slate-400 flex items-center justify-between">
+                  <span>Associated Incidents ({assetIncidents.length}):</span>
+                </span>
+                <div className="mt-1 space-y-1.5 max-h-32 overflow-y-auto">
+                  {assetIncidents.length > 0 ? (
+                    assetIncidents.map((inc) => (
+                      <div
+                        key={inc.id}
+                        className="bg-[#111A2D] p-2 rounded border border-slate-800 flex items-center justify-between text-[11px]"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <Badge priority={inc.severity}>{inc.severity}</Badge>
+                            <span className="text-cyan-400 font-semibold">{inc.id}</span>
+                          </div>
+                          <div className="text-slate-300 truncate max-w-[170px]">{inc.title}</div>
+                        </div>
+                        {onNavigateToIncident && (
+                          <button
+                            onClick={() => onNavigateToIncident(inc.id)}
+                            className="p-1 rounded text-slate-400 hover:text-cyan-300 hover:bg-slate-800"
+                            title="Open Incident"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-[#111A2D] p-2.5 rounded border border-slate-800 text-slate-400 text-center">
+                      No active incidents linked to this host.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Associated Telemetry Events */}
+              <div>
+                <span className="text-[11px] text-slate-400">
+                  Associated Telemetry Events ({assetEvents.length}):
+                </span>
+                <div className="mt-1 space-y-1 max-h-28 overflow-y-auto">
+                  {assetEvents.length > 0 ? (
+                    assetEvents.slice(0, 4).map((evt) => (
+                      <div
+                        key={evt.id}
+                        className="bg-[#0B101A] p-2 rounded border border-slate-800 flex items-center justify-between text-[10px]"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-cyan-400">{evt.id}</span>
+                          <span className="text-slate-300">{evt.eventType}</span>
+                        </div>
+                        <Badge severity={evt.severity}>{evt.severity}</Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="bg-[#0B101A] p-2 rounded border border-slate-800 text-slate-400 text-center text-[11px]">
+                      No recent events recorded.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

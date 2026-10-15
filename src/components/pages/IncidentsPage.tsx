@@ -1,16 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   AlertTriangle,
   Search,
   ExternalLink,
   Server,
   Activity,
-  FileCheck
+  FileCheck,
+  Layers
 } from 'lucide-react';
 import { Badge } from '../common/Badge';
 import { Modal } from '../common/Modal';
-import { Incident, IncidentStatus } from '../../types';
-import { MOCK_INCIDENTS } from '../../data/mockData';
+import { IncidentStatus } from '../../types';
+import { useDemo } from '../../context/DemoContext';
 
 interface IncidentsPageProps {
   onNavigateToStoryline?: () => void;
@@ -21,11 +22,23 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
   onNavigateToStoryline,
   onNavigateToPlaybooks
 }) => {
-  const [incidents, setIncidents] = useState<Incident[]>(MOCK_INCIDENTS);
+  const {
+    incidents,
+    updateIncidentStatus,
+    selectedIncidentId,
+    setSelectedIncidentId,
+    events
+  } = useDemo();
+
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
+
+  // Selected incident object
+  const activeModalIncident = useMemo(() => {
+    if (!selectedIncidentId) return null;
+    return incidents.find((i) => i.id === selectedIncidentId) || null;
+  }, [selectedIncidentId, incidents]);
 
   const filteredIncidents = incidents.filter((inc) => {
     const matchesPriority = priorityFilter === 'all' || inc.severity === priorityFilter;
@@ -40,14 +53,16 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
     return matchesPriority && matchesStatus && matchesSearch;
   });
 
-  const handleUpdateStatus = (incidentId: string, newStatus: IncidentStatus) => {
-    setIncidents((prev) =>
-      prev.map((i) => (i.id === incidentId ? { ...i, status: newStatus } : i))
+  // Find linked events for the modal
+  const correlatedEvents = useMemo(() => {
+    if (!activeModalIncident) return [];
+    return events.filter(
+      (e) =>
+        e.relatedIncidentId === activeModalIncident.id ||
+        (activeModalIncident.relatedEventIds && activeModalIncident.relatedEventIds.includes(e.id)) ||
+        e.destinationIp.includes(activeModalIncident.affectedAsset)
     );
-    if (selectedIncident && selectedIncident.id === incidentId) {
-      setSelectedIncident({ ...selectedIncident, status: newStatus });
-    }
-  };
+  }, [activeModalIncident, events]);
 
   return (
     <div className="space-y-6">
@@ -59,9 +74,12 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
             <h2 className="text-sm font-semibold text-white tracking-wide uppercase font-mono">
               Incident Management & Triage
             </h2>
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold">
+              {incidents.filter((i) => i.status !== 'Resolved').length} Active
+            </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Correlated multi-stage security incidents prioritized by attack velocity and blast radius.
+            Correlated multi-stage security incidents automatically created and updated by detection rules.
           </p>
         </div>
 
@@ -127,6 +145,7 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                 <th className="py-3 px-4">Title & Attack Chain</th>
                 <th className="py-3 px-4">Affected Asset</th>
                 <th className="py-3 px-4">Confidence</th>
+                <th className="py-3 px-4">Correlated Events</th>
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Timestamp</th>
                 <th className="py-3 px-4 text-right">Details</th>
@@ -137,7 +156,7 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                 filteredIncidents.map((inc) => (
                   <tr
                     key={inc.id}
-                    onClick={() => setSelectedIncident(inc)}
+                    onClick={() => setSelectedIncidentId(inc.id)}
                     className="hover:bg-slate-800/40 cursor-pointer transition-colors group"
                   >
                     <td className="py-3.5 px-4">
@@ -172,20 +191,25 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
+                      <span className="text-slate-300 font-semibold bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                        {inc.eventsCount} telemetry hits
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4">
                       <Badge status={inc.status}>{inc.status}</Badge>
                     </td>
                     <td className="py-3.5 px-4 text-slate-400 text-[11px] whitespace-nowrap">
-                      {inc.timestamp}
+                      {inc.timestamp.includes(' ') ? inc.timestamp.split(' ')[1] : inc.timestamp}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedIncident(inc);
+                          setSelectedIncidentId(inc.id);
                         }}
                         className="text-xs text-cyan-400 hover:text-cyan-300 font-medium inline-flex items-center gap-1"
                       >
-                        <span>View</span>
+                        <span>Triage</span>
                         <ExternalLink className="w-3 h-3" />
                       </button>
                     </td>
@@ -193,7 +217,7 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-slate-400">
+                  <td colSpan={9} className="py-8 text-center text-slate-400">
                     No incidents match the selected priority and status filters.
                   </td>
                 </tr>
@@ -204,12 +228,12 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
       </div>
 
       {/* Incident Detail Modal */}
-      {selectedIncident && (
+      {activeModalIncident && (
         <Modal
-          isOpen={!!selectedIncident}
-          onClose={() => setSelectedIncident(null)}
-          title={`Incident Inspection: ${selectedIncident.id}`}
-          subtitle={`${selectedIncident.title} • ${selectedIncident.timestamp}`}
+          isOpen={!!activeModalIncident}
+          onClose={() => setSelectedIncidentId(null)}
+          title={`Incident Triage: ${activeModalIncident.id}`}
+          subtitle={`${activeModalIncident.title} • ${activeModalIncident.timestamp}`}
           maxWidth="2xl"
         >
           <div className="space-y-4">
@@ -218,32 +242,32 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
               <div>
                 <span className="text-[11px] text-slate-400">Priority</span>
                 <div className="mt-1">
-                  <Badge priority={selectedIncident.severity}>{selectedIncident.severity}</Badge>
+                  <Badge priority={activeModalIncident.severity}>{activeModalIncident.severity}</Badge>
                 </div>
               </div>
               <div>
-                <span className="text-[11px] text-slate-400">Status</span>
+                <span className="text-[11px] text-slate-400">Current Status</span>
                 <div className="mt-1">
-                  <Badge status={selectedIncident.status}>{selectedIncident.status}</Badge>
+                  <Badge status={activeModalIncident.status}>{activeModalIncident.status}</Badge>
                 </div>
               </div>
               <div>
                 <span className="text-[11px] text-slate-400">AI Confidence</span>
-                <div className="text-cyan-400 font-bold mt-1">{selectedIncident.confidence}%</div>
+                <div className="text-cyan-400 font-bold mt-1">{activeModalIncident.confidence}%</div>
               </div>
               <div>
                 <span className="text-[11px] text-slate-400">Assigned Team</span>
-                <div className="text-slate-300 mt-1 truncate">{selectedIncident.assignedAnalyst || 'SecOps Tier-1'}</div>
+                <div className="text-slate-300 mt-1 truncate">{activeModalIncident.assignedAnalyst || 'SecOps Tier-1'}</div>
               </div>
             </div>
 
             {/* Incident Summary */}
             <div className="space-y-1">
               <h4 className="text-xs font-mono font-semibold text-slate-300 uppercase tracking-wider">
-                Correlation Summary
+                Correlation Summary & Rule Rationale
               </h4>
               <p className="text-xs text-slate-300 bg-[#0B101A] p-3 rounded border border-slate-800 leading-relaxed font-sans">
-                {selectedIncident.summary}
+                {activeModalIncident.summary}
               </p>
             </div>
 
@@ -254,8 +278,8 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                   <Server className="w-3.5 h-3.5 text-cyan-400" />
                   Target Host Details
                 </span>
-                <div className="text-slate-200 font-bold">{selectedIncident.affectedAsset}</div>
-                <div className="text-slate-400 text-[11px]">IP: {selectedIncident.affectedAssetIp}</div>
+                <div className="text-slate-200 font-bold">{activeModalIncident.affectedAsset}</div>
+                <div className="text-slate-400 text-[11px]">IP: {activeModalIncident.affectedAssetIp}</div>
               </div>
 
               <div className="bg-[#111A2D] p-3 rounded border border-slate-800 space-y-1">
@@ -263,8 +287,34 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                   <Activity className="w-3.5 h-3.5 text-amber-400" />
                   MITRE Technique
                 </span>
-                <div className="text-amber-300 font-bold">{selectedIncident.mitreTechnique}</div>
-                <div className="text-slate-400 text-[11px]">{selectedIncident.attackChainStep}</div>
+                <div className="text-amber-300 font-bold">{activeModalIncident.mitreTechnique}</div>
+                <div className="text-slate-400 text-[11px]">{activeModalIncident.attackChainStep}</div>
+              </div>
+            </div>
+
+            {/* Correlated Telemetry Events List */}
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-mono font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                Correlated Telemetry Events ({correlatedEvents.length})
+              </h4>
+              <div className="bg-[#0B101A] rounded border border-slate-800 max-h-36 overflow-y-auto divide-y divide-slate-800/80 text-xs font-mono">
+                {correlatedEvents.length > 0 ? (
+                  correlatedEvents.map((evt) => (
+                    <div key={evt.id} className="p-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-cyan-400 font-semibold">{evt.id}</span>
+                        <span className="text-slate-200">{evt.eventType}</span>
+                        <span className="text-slate-400 text-[11px]">{evt.sourceIp}</span>
+                      </div>
+                      <Badge severity={evt.severity}>{evt.severity}</Badge>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-3 text-slate-400 text-center">
+                    Correlated by host affinity. Initial telemetry baseline.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -275,7 +325,7 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                 Recommended SOC Playbook Action
               </h4>
               <div className="bg-cyan-950/40 border border-cyan-800/60 p-3 rounded text-xs text-cyan-200">
-                {selectedIncident.recommendedAction}
+                {activeModalIncident.recommendedAction}
               </div>
             </div>
 
@@ -286,10 +336,10 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                 {(['Active', 'Investigating', 'Contained', 'Resolved'] as IncidentStatus[]).map((status) => (
                   <button
                     key={status}
-                    onClick={() => handleUpdateStatus(selectedIncident.id, status)}
-                    className={`px-2 py-1 rounded text-[11px] font-mono border transition-colors ${
-                      selectedIncident.status === status
-                        ? 'bg-slate-700 text-white border-slate-500'
+                    onClick={() => updateIncidentStatus(activeModalIncident.id, status)}
+                    className={`px-2.5 py-1 rounded text-[11px] font-mono border transition-colors ${
+                      activeModalIncident.status === status
+                        ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
                         : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
                     }`}
                   >
@@ -302,7 +352,7 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                 {onNavigateToStoryline && (
                   <button
                     onClick={() => {
-                      setSelectedIncident(null);
+                      setSelectedIncidentId(null);
                       onNavigateToStoryline();
                     }}
                     className="px-3 py-1.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-700 hover:bg-cyan-900 text-xs font-mono transition-colors"
@@ -313,7 +363,7 @@ export const IncidentsPage: React.FC<IncidentsPageProps> = ({
                 {onNavigateToPlaybooks && (
                   <button
                     onClick={() => {
-                      setSelectedIncident(null);
+                      setSelectedIncidentId(null);
                       onNavigateToPlaybooks();
                     }}
                     className="px-3 py-1.5 rounded bg-slate-800 text-slate-200 border border-slate-700 hover:bg-slate-700 text-xs font-mono transition-colors"

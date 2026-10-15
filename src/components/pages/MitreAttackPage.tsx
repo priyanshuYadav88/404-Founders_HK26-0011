@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Target,
   Search,
@@ -8,11 +8,25 @@ import {
 import { Modal } from '../common/Modal';
 import { MitreTechnique } from '../../types';
 import { MOCK_MITRE_TECHNIQUES } from '../../data/mockData';
+import { useDemo } from '../../context/DemoContext';
 
 export const MitreAttackPage: React.FC = () => {
+  const { events } = useDemo();
   const [techniques] = useState<MitreTechnique[]>(MOCK_MITRE_TECHNIQUES);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTechnique, setSelectedTechnique] = useState<MitreTechnique | null>(null);
+
+  // Dynamically calculate detection count from current events buffer
+  const techniqueDetections = useMemo(() => {
+    const counts: Record<string, number> = {};
+    techniques.forEach((t) => {
+      const liveMatches = events.filter(
+        (e) => e.mitreTechnique && e.mitreTechnique.includes(t.techniqueId)
+      ).length;
+      counts[t.techniqueId] = t.detectionCount + liveMatches;
+    });
+    return counts;
+  }, [events, techniques]);
 
   const filteredTechniques = techniques.filter(
     (t) =>
@@ -73,47 +87,51 @@ export const MitreAttackPage: React.FC = () => {
 
       {/* Techniques Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredTechniques.map((item) => (
-          <div
-            key={item.id}
-            onClick={() => setSelectedTechnique(item)}
-            className="bg-[#0E1626] border border-slate-800 rounded-lg p-5 flex flex-col justify-between hover:border-cyan-800/80 cursor-pointer transition-all group"
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-base font-bold font-mono text-cyan-400 group-hover:text-cyan-300 transition-colors">
-                  {item.techniqueId}
-                </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#111A2D] text-slate-300 border border-slate-700">
-                  {item.mappingType} Mapping
-                </span>
+        {filteredTechniques.map((item) => {
+          const liveCount = techniqueDetections[item.techniqueId] ?? item.detectionCount;
+
+          return (
+            <div
+              key={item.id}
+              onClick={() => setSelectedTechnique(item)}
+              className="bg-[#0E1626] border border-slate-800 rounded-lg p-5 flex flex-col justify-between hover:border-cyan-800/80 cursor-pointer transition-all group"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-bold font-mono text-cyan-400 group-hover:text-cyan-300 transition-colors">
+                    {item.techniqueId}
+                  </span>
+                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-[#111A2D] text-slate-300 border border-slate-700">
+                    {item.mappingType} Mapping
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-white">
+                    {item.name}
+                  </h3>
+                  <span className="text-[11px] font-mono text-slate-400 block mt-0.5">
+                    Tactic: {item.tactic}
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                  {item.description}
+                </p>
               </div>
 
-              <div>
-                <h3 className="text-sm font-semibold text-white">
-                  {item.name}
-                </h3>
-                <span className="text-[11px] font-mono text-slate-400 block mt-0.5">
-                  Tactic: {item.tactic}
+              <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
+                <span className="text-slate-400">
+                  Telemetry hits: <span className="text-cyan-300 font-bold">{liveCount}</span>
+                </span>
+                <span className="text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1">
+                  <span>Inspect</span>
+                  <ExternalLink className="w-3 h-3" />
                 </span>
               </div>
-
-              <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                {item.description}
-              </p>
             </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400">
-                Correlated: <span className="text-slate-200">{item.detectionCount} hits</span>
-              </span>
-              <span className="text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1">
-                <span>Inspect</span>
-                <ExternalLink className="w-3 h-3" />
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Technique Detail Modal */}
@@ -157,7 +175,7 @@ export const MitreAttackPage: React.FC = () => {
 
             <div className="space-y-1">
               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Associated Telemetry Events & Correlated Incidents
+                Correlated Telemetry Heuristics
               </h4>
               <div className="flex flex-wrap gap-2">
                 {selectedTechnique.associatedAlerts.map((alert, i) => (

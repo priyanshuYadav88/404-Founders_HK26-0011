@@ -12,15 +12,18 @@ import { AssetInventoryPage } from './components/pages/AssetInventoryPage';
 import { PlaybooksPage } from './components/pages/PlaybooksPage';
 import { DetectionQualityPage } from './components/pages/DetectionQualityPage';
 import { SecurityEvent, Incident } from './types';
+import { DemoProvider, useDemo } from './context/DemoContext';
 
-export const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [activePage, setActivePage] = useState<PageId>('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<SecurityEvent | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const { setSelectedEvent, setSelectedIncidentId, incidents, simulateEvent } = useDemo();
 
   const handleRefresh = () => {
     setIsRefreshing(true);
+    simulateEvent();
     setTimeout(() => {
       setIsRefreshing(false);
     }, 600);
@@ -31,13 +34,21 @@ export const App: React.FC = () => {
     setActivePage('live-monitor');
   };
 
-  const handleSelectIncidentFromAnywhere = (_inc: Incident) => {
+  const handleSelectIncidentFromAnywhere = (inc: Incident) => {
+    setSelectedIncidentId(inc.id);
     setActivePage('incidents');
   };
 
+  const handleNavigateToIncident = (incidentId: string) => {
+    setSelectedIncidentId(incidentId);
+    setActivePage('incidents');
+  };
+
+  const p1IncidentsCount = incidents.filter((i) => i.severity === 'P1' && i.status !== 'Resolved').length;
+
   return (
     <div className="min-h-screen bg-[#0B0F17] text-slate-200 flex flex-col font-sans">
-      {/* Top Demo Banner */}
+      {/* Top Demo Banner with interactive simulation controls */}
       <DemoBanner />
 
       {/* Main SOC Header */}
@@ -51,7 +62,7 @@ export const App: React.FC = () => {
           onPageSelect={(page) => setActivePage(page)}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-          activeIncidentsCount={1}
+          activeIncidentsCount={p1IncidentsCount}
         />
 
         {/* Dynamic Page Workspace */}
@@ -67,10 +78,7 @@ export const App: React.FC = () => {
             )}
 
             {activePage === 'live-monitor' && (
-              <LiveMonitorPage
-                selectedEvent={selectedEvent}
-                onSelectEvent={(evt) => setSelectedEvent(evt)}
-              />
+              <LiveMonitorPage onNavigateToIncident={handleNavigateToIncident} />
             )}
 
             {activePage === 'incidents' && (
@@ -86,7 +94,9 @@ export const App: React.FC = () => {
 
             {activePage === 'mitre-attack' && <MitreAttackPage />}
 
-            {activePage === 'asset-inventory' && <AssetInventoryPage />}
+            {activePage === 'asset-inventory' && (
+              <AssetInventoryPage onNavigateToIncident={handleNavigateToIncident} />
+            )}
 
             {activePage === 'response-playbooks' && <PlaybooksPage />}
 
@@ -95,6 +105,14 @@ export const App: React.FC = () => {
         </main>
       </div>
     </div>
+  );
+};
+
+export const App: React.FC = () => {
+  return (
+    <DemoProvider>
+      <AppContent />
+    </DemoProvider>
   );
 };
 

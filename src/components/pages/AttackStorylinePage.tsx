@@ -1,19 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   GitBranch,
   ArrowRight,
   ShieldAlert,
-  Clock,
-  Info
+  Info,
+  Play,
+  Layers
 } from 'lucide-react';
 import { Badge } from '../common/Badge';
-import { StorylineNode } from '../../types';
+import { StorylineNode, SecurityEvent } from '../../types';
 import { MOCK_STORYLINE_NODES } from '../../data/mockData';
+import { useDemo } from '../../context/DemoContext';
 
 export const AttackStorylinePage: React.FC = () => {
+  const { events, simulateEvent } = useDemo();
   const [nodes] = useState<StorylineNode[]>(MOCK_STORYLINE_NODES);
-  const [selectedNode, setSelectedNode] = useState<StorylineNode>(nodes[3]); // default to step 4 (most critical)
+  const [selectedNode, setSelectedNode] = useState<StorylineNode>(nodes[3]);
   const [activeView, setActiveView] = useState<'timeline' | 'graph'>('timeline');
+
+  // Match live simulated events to each storyline stage
+  const matchedEventsByStage = useMemo(() => {
+    return {
+      'node-1': events.filter((e) => e.eventType === 'Port Scan'),
+      'node-2': events.filter((e) => e.eventType === 'Failed Login'),
+      'node-3': events.filter((e) => e.eventType === 'Suspicious Login'),
+      'node-4': events.filter((e) => e.eventType === 'Privilege Escalation')
+    };
+  }, [events]);
+
+  const activeStageEvents = matchedEventsByStage[selectedNode.id as keyof typeof matchedEventsByStage] || [];
+
+  const handleSimulateStageEvent = (node: StorylineNode) => {
+    const stageEventMap: Record<string, Partial<SecurityEvent>> = {
+      'node-1': {
+        eventType: 'Port Scan',
+        details: 'Simulated SYN sweep across target host 10.0.1.15 listening ports.',
+        severity: 'low'
+      },
+      'node-2': {
+        eventType: 'Failed Login',
+        details: 'Sequential SSH credential brute force targeting svc_backup.',
+        severity: 'medium'
+      },
+      'node-3': {
+        eventType: 'Suspicious Login',
+        details: 'Anomalous SSH interactive key login established for svc_backup.',
+        severity: 'high'
+      },
+      'node-4': {
+        eventType: 'Privilege Escalation',
+        details: 'Unauthorized modification to sudoers configuration granting NOPASSWD root privilege.',
+        severity: 'critical'
+      }
+    };
+
+    simulateEvent(stageEventMap[node.id]);
+  };
 
   return (
     <div className="space-y-6">
@@ -26,11 +68,11 @@ export const AttackStorylinePage: React.FC = () => {
               Attack Storyline Reconstruction
             </h2>
             <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 font-semibold">
-              Simulated Scenario
+              Simulated Sequence
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Correlated multi-stage attack lifecycle based on temporal proximity and host telemetry.
+            Correlated multi-stage attack lifecycle linking live synthetic events across the cyber kill chain.
           </p>
         </div>
 
@@ -54,7 +96,7 @@ export const AttackStorylinePage: React.FC = () => {
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Detailed Ledger
+            Evidence Ledger
           </button>
         </div>
       </div>
@@ -89,6 +131,7 @@ export const AttackStorylinePage: React.FC = () => {
           {nodes.map((node, index) => {
             const isSelected = selectedNode.id === node.id;
             const isLast = index === nodes.length - 1;
+            const liveMatches = matchedEventsByStage[node.id as keyof typeof matchedEventsByStage]?.length || 0;
 
             return (
               <div key={node.id} className="relative flex flex-col">
@@ -127,10 +170,10 @@ export const AttackStorylinePage: React.FC = () => {
                       {node.title}
                     </h3>
 
-                    {/* Timestamp */}
+                    {/* Live Matched Count Badge */}
                     <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
-                      <Clock className="w-3 h-3 text-cyan-400" />
-                      <span>{node.timestamp}</span>
+                      <Layers className="w-3 h-3 text-cyan-400" />
+                      <span>{liveMatches} Live Telemetry Matches</span>
                     </div>
 
                     {/* Brief Evidence */}
@@ -141,8 +184,8 @@ export const AttackStorylinePage: React.FC = () => {
 
                   {/* Node Footer */}
                   <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-slate-400">Status:</span>
-                    <span className="text-cyan-400 font-semibold">{node.statusText}</span>
+                    <span className="text-slate-400">Relationship:</span>
+                    <span className="text-cyan-400 font-semibold">Inferred Link</span>
                   </div>
                 </div>
 
@@ -176,9 +219,18 @@ export const AttackStorylinePage: React.FC = () => {
             </p>
           </div>
 
-          <div className="bg-[#111A2D] px-3 py-1.5 rounded border border-slate-800 text-xs font-mono text-amber-300 flex items-center gap-1.5">
-            <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-            <span>MITRE: {selectedNode.techniqueId} ({selectedNode.techniqueName})</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => handleSimulateStageEvent(selectedNode)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700 text-xs font-mono transition-colors"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              <span>Inject Stage Event</span>
+            </button>
+            <div className="bg-[#111A2D] px-3 py-1.5 rounded border border-slate-800 text-xs font-mono text-amber-300 flex items-center gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>MITRE: {selectedNode.techniqueId} ({selectedNode.techniqueName})</span>
+            </div>
           </div>
         </div>
 
@@ -197,7 +249,7 @@ export const AttackStorylinePage: React.FC = () => {
         {/* Evidence Analysis */}
         <div className="space-y-2">
           <h4 className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-300">
-            Forensic Evidence Summary
+            Forensic Evidence Summary & Correlation Rationale
           </h4>
           <div className="bg-[#111A2D] p-4 rounded-lg border border-slate-800 text-xs text-slate-300 leading-relaxed font-sans">
             {selectedNode.evidenceSummary}
@@ -218,6 +270,36 @@ export const AttackStorylinePage: React.FC = () => {
                 {ind}
               </span>
             ))}
+          </div>
+        </div>
+
+        {/* Live Matching Telemetry in Buffer */}
+        <div className="space-y-2 pt-2">
+          <h4 className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+            <span>Live Events Ingestion Matching Stage ({activeStageEvents.length})</span>
+            <span className="text-[11px] text-cyan-400 lowercase font-normal">automatically filtered from demo state</span>
+          </h4>
+          <div className="bg-[#0B101A] rounded border border-slate-800 max-h-40 overflow-y-auto divide-y divide-slate-800 text-xs font-mono">
+            {activeStageEvents.length > 0 ? (
+              activeStageEvents.map((e) => (
+                <div key={e.id} className="p-2.5 flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-cyan-400 font-bold">{e.id}</span>
+                      <span className="text-slate-300">{e.details}</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400">
+                      Src: {e.sourceIp} &rarr; Dst: {e.destinationIp}
+                    </div>
+                  </div>
+                  <Badge severity={e.severity}>{e.severity}</Badge>
+                </div>
+              ))
+            ) : (
+              <div className="p-4 text-center text-slate-400">
+                No events in current buffer match this stage. Click "Inject Stage Event" above to simulate one!
+              </div>
+            )}
           </div>
         </div>
       </div>
